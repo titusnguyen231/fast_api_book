@@ -101,3 +101,4 @@ def delete_author(
 
     db.delete(author)
     db.commit()
+    

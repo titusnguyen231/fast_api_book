@@ -101,3 +101,4 @@ def delete_category(
 
     db.delete(category)
     db.commit()
+    
