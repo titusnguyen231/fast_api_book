@@ -15,9 +15,8 @@ class AuthorUpdate(AuthorBase):
 class AuthorInDBBase(AuthorBase):
     id: int
 
-    model_config = {
-        "from_attributes": True
-    }
+    class Config:
+        from_attributes = True
 
 class Author(AuthorInDBBase):
     """Schema return Author"""
