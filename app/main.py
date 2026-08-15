@@ -12,6 +12,7 @@ app = FastAPI(
     description="Simple API to manage books, authors, categories and book covers",
     version="1.0.0",
 )
+app.mount("/satic",StaticFiles(directory="app/static"),name="static")
 #Include routes
 app.include_router(authors.router, prefix="/authors", tags=["Authors"])
 app.include_router(categories.router, prefix="/categories", tags=["Categories"])

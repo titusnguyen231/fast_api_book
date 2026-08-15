@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException,status, Query
+from fastapi import APIRouter, Depends, HTTPException,status, Query, UploadFile, File
 from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
@@ -6,8 +6,13 @@ from sqlalchemy import or_
 from app.api.deps import get_db
 from app import models
 from app.schemas.book import Book, BookCreate, BookUpdate
+from pathlib import Path
+import uuid
 
 router = APIRouter()       
+
+COVERS_DIR = Path("app/static/covers")
+COVERS_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.get("/",response_model=List[Book])
 def list_books(
@@ -164,3 +169,69 @@ def delete_book(
 
     db.delete(book)
     db.commit()
+
+@router.post("/{book_id}/cover", response_model=Book)
+async def upload_book_cover(
+    book_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """
+    Upload cover image for book.
+    - Allow jpg/png/jpeg
+    - Save file in path: app/static/covers
+    - Update book.cover_image to URL /static/covers/...
+    """
+    book = db.query(models.Book).filter(models.Book.id == book_id).first()
+    if not book:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Book not found",
+        )
+
+    if not file.filename:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No file selected",
+        )
+
+    allowed_content_types = {"image/jpeg", "image/jpg", "image/png"}
+    allowed_extensions = {".jpg", ".jpeg", ".png"}
+
+    content_type = (file.content_type or "").lower()
+    ext = Path(file.filename).suffix.lower()
+
+    if content_type not in allowed_content_types and ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image type. Only .jpg, .jpeg, and .png are allowed.",
+        )
+
+    if ext not in allowed_extensions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image extension. Only .jpg, .jpeg, and .png are allowed.",
+        )
+
+    contents = await file.read()
+
+    max_size = 2 * 1024 * 1024
+    if len(contents) > max_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Max size is 2MB.",
+        )
+
+    filename = f"book_{book_id}_{uuid.uuid4().hex}{ext}"
+    file_path = COVERS_DIR / filename
+
+    with open(file_path, "wb") as f:
+        f.write(contents)
+
+    book.cover_image = f"/static/covers/{filename}"
+
+    db.add(book)
+    db.commit()
+    db.refresh(book)
+
+    return book
